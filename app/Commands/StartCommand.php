@@ -2,30 +2,76 @@
 
 namespace App\Commands;
 
+use App\Models\TelegramUser;
 use Telegram\Bot\Commands\Command;
+use Telegram\Bot\Objects\User;
 
 class StartCommand extends Command
 {
     protected $name = 'start';
     protected $description = 'Запуск / Перезапуск бота';
+    protected TelegramUser $telegramUser;
+
+    public function __construct(TelegramUser $telegramUser)
+    {
+        $this->telegramUser = $telegramUser;
+    }
 
     public function handle()
     {
-        $message = '<b>жирный текст</b>'
-            . PHP_EOL .'<i>курсивный текст</i>'
-            . PHP_EOL .'<u>подчеркнутный текст</u>'
-            . PHP_EOL .'<s>перечеркнутный текст</s>'
-            . PHP_EOL .'<span class="tg-spoiler">Какой то спойлер Lorem ipsum dolor sit amet, consectetur adipisicing elit. Reprehenderit, voluptate!</span>'
-            . PHP_EOL .'<b>жирный текст <i>еще и курсивный <s>еще и перечеркнутый </s></i></b>'
-            . PHP_EOL .'<a href="http://www.example.com/">Ссылка в текстом</a>'
-            . PHP_EOL .'<a href="tg://user?id=264493118">упоминание пользователя</a>'
-            . PHP_EOL .'<code>код фиксированной ширины</code>'
-            . PHP_EOL .'<pre>предварительно отформатированный блок кода фиксированной ширины</pre>'
-            . PHP_EOL .'<pre><code class="language-python">предварительно отформатированный блок кода фиксированной ширины, написанный на языке программирования Python</code></pre>'
-        ;
+        //Получаем всю информацию о пользователе
+        $userData = $this->getUpdate()->message->from;
+        //Получаем его уникальный ID
+        $userId = $userData->id;
+        //Пробуем найти юзера в БД
+        $telegramUser = $this->telegramUser->where('user_id', '=', $userId)->first();
+        //Проверяем, если нашли пользователя отправляем сообщение как старому
+        //Иначе добавляем его в бд и отправялем сообщение как новому
+        if ($telegramUser) {
+            $this->sendAnswerForOldUsers();
+        } else {
+            $this->addNewTelegramUser($userData);
+            $this->sendAnswerForNewUsers();
+        }
+    }
+
+    /**
+     * Добавление пользователя в базу данных.
+     * @param User $userData
+     * @return void
+     */
+    public function addNewTelegramUser(User $userData)
+    {
+        $this->telegramUser->insert([
+            'user_id' => $userData->id,
+            'username' => $userData->username,
+            'first_name' => $userData->first_name,
+            'last_name' => $userData->last_name,
+            'language_code' => $userData->language_code,
+            'is_premium' => $userData->is_premium,
+            'is_bot' => $userData->is_bot,
+        ]);
+    }
+
+    /**
+     * Ответ старому пользователю.
+     * @return void
+     */
+    public function sendAnswerForOldUsers(): void
+    {
         $this->replyWithMessage([
-            'text' => $message,
-            'parse_mode' => 'HTML'
+            'text' => 'Рады видеть вас снова!🥳'
+        ]);
+    }
+
+    /**
+     * Ответ новому пользователю.
+     * @return void
+     */
+    public function sendAnswerForNewUsers(): void
+    {
+        $this->replyWithMessage([
+            'text' => 'Добро пожаловать в наш телеграм бот!'
         ]);
     }
 }
